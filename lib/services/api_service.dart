@@ -55,7 +55,6 @@ class ApiService {
       // ---------------------------------------------------------
       // STEP 3: Parse the Server-Sent Events (SSE) string
       // ---------------------------------------------------------
-      // Gradio streams multiple events. We only want the final "complete" block.
       if (responseString.contains('event: complete')) {
         // Isolate the section after the 'event: complete' signal
         final parts = responseString.split('event: complete');
@@ -68,15 +67,26 @@ class ApiService {
           final jsonString = completeSection.substring(dataIndex + 6).trim();
           final dataArray = jsonDecode(jsonString);
 
-          // Our AI's text output is the first item
+          // Our AI's raw text output is the first item
           final String aiOutputString = dataArray[0];
 
-          // Clean the markdown ticks
-          String cleanJson = aiOutputString
-              .replaceAll('```json', '')
-              .replaceAll('```', '')
-              .trim();
-          return jsonDecode(cleanJson);
+          // --- THE BULLETPROOF JSON EXTRACTOR ---
+          // Find the exact start and end of the JSON object, ignoring chatty text
+          int startIndex = aiOutputString.indexOf('{');
+          int endIndex = aiOutputString.lastIndexOf('}');
+
+          if (startIndex != -1 && endIndex != -1 && endIndex >= startIndex) {
+            // Slice out only the JSON part
+            String cleanJson = aiOutputString.substring(
+              startIndex,
+              endIndex + 1,
+            );
+            return jsonDecode(cleanJson); // Parse the perfectly isolated JSON
+          } else {
+            throw Exception(
+              "The AI's response was cut off or did not contain JSON.",
+            );
+          }
         }
       } else if (responseString.contains('event: error')) {
         throw Exception(
