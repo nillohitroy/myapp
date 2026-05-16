@@ -249,14 +249,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
 
-              // THE RESULT CARDS
+              // THE RESULT CARDS (WITH THE BULLETPROOF TYPE-SAFE FIX)
               if (_medicalData != null) ...[
                 const SizedBox(height: 16),
                 const Text("Extraction Complete", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
                 const SizedBox(height: 16),
-                _buildMedicalCard("Patient Condition", _medicalData!['patient_condition'] ?? 'Unknown', Icons.medical_services),
-                _buildMedicalCard("Medications", _medicalData!['medications'].toString(), Icons.medication),
-                _buildMedicalCard("Treatment Plan", _medicalData!['treatment_plan'] ?? 'No plan extracted', Icons.assignment_turned_in),
+                _buildMedicalCard(
+                  "Patient Condition", 
+                  _medicalData!['patient_condition']?.toString() ?? 'Unknown', 
+                  Icons.medical_services
+                ),
+                _buildMedicalCard(
+                  "Medications", 
+                  _medicalData!['medications']?.toString() ?? 'None extracted', 
+                  Icons.medication
+                ),
+                _buildMedicalCard(
+                  "Treatment Plan", 
+                  _medicalData!['treatment_plan']?.toString() ?? 'No plan extracted', 
+                  Icons.assignment_turned_in
+                ),
               ]
             ],
           ),
