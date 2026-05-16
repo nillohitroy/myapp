@@ -107,6 +107,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // --- THE HUMANIZER FILTER ---
+  // This catches any raw JSON arrays/objects and strips out robotic brackets
+  String _formatAiText(dynamic data) {
+    if (data == null) return "No information extracted.";
+    
+    // If the AI accidentally sent a List, join it nicely
+    if (data is List) {
+      return data.join(", "); 
+    }
+    
+    // If the AI accidentally sent a Map, join its values
+    if (data is Map) {
+      return data.values.join("\n"); 
+    }
+    
+    // Convert to string and strip out any residual brackets or quotes
+    String cleanText = data.toString();
+    cleanText = cleanText.replaceAll(RegExp(r'[\[\]\{\}"]'), '').trim();
+    
+    return cleanText.isEmpty ? "No information extracted." : cleanText;
+  }
+
   // --- THE SLEEK RESULT CARD WIDGET ---
   Widget _buildMedicalCard(String title, String value, IconData icon) {
     return Container(
@@ -249,24 +271,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
 
-              // THE RESULT CARDS (WITH THE BULLETPROOF TYPE-SAFE FIX)
+              // THE RESULT CARDS (WITH THE BULLETPROOF HUMANIZER FILTER)
               if (_medicalData != null) ...[
                 const SizedBox(height: 16),
                 const Text("Extraction Complete", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
                 const SizedBox(height: 16),
                 _buildMedicalCard(
                   "Patient Condition", 
-                  _medicalData!['patient_condition']?.toString() ?? 'Unknown', 
+                  _formatAiText(_medicalData!['patient_condition']), 
                   Icons.medical_services
                 ),
                 _buildMedicalCard(
                   "Medications", 
-                  _medicalData!['medications']?.toString() ?? 'None extracted', 
+                  _formatAiText(_medicalData!['medications']), 
                   Icons.medication
                 ),
                 _buildMedicalCard(
                   "Treatment Plan", 
-                  _medicalData!['treatment_plan']?.toString() ?? 'No plan extracted', 
+                  _formatAiText(_medicalData!['treatment_plan']), 
                   Icons.assignment_turned_in
                 ),
               ]
