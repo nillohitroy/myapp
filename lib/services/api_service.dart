@@ -42,59 +42,53 @@ class ApiService {
       final eventId = jsonDecode(postResponse.body)['event_id'];
 
       // ---------------------------------------------------------
-      // STEP 2: Wait for the AI to process (Listen to the stream)
+      // STEP 2 & 3: Listen to the Live SSE Stream (Prevents Timeouts)
       // ---------------------------------------------------------
-      // http.get will automatically "hang" and wait until the CPU finishes
-      // generating the response (around 2 minutes) and closes the connection.
-      final getResponse = await http.get(
-        Uri.parse("$baseUrl/gradio_api/call/predict/$eventId"),
+      // Instead of a single 'get', we open a streaming request
+      final request = http.Request(
+        'GET', 
+        Uri.parse("$baseUrl/gradio_api/call/predict/$eventId")
       );
+      
+      final streamedResponse = await request.send();
+      String accumulatedData = "";
 
-      final responseString = getResponse.body;
+      // Listen to the heartbeat as the data trickles in
+      await for (var chunk in streamedResponse.stream.transform(utf8.decoder)) {
+        accumulatedData += chunk;
 
-      // ---------------------------------------------------------
-      // STEP 3: Parse the Server-Sent Events (SSE) string
-      // ---------------------------------------------------------
-      if (responseString.contains('event: complete')) {
-        // Isolate the section after the 'event: complete' signal
-        final parts = responseString.split('event: complete');
-        final completeSection = parts.last;
+        // If we see the complete flag, extract the data and close the stream
+        if (accumulatedData.contains('event: complete')) {
+          final parts = accumulatedData.split('event: complete');
+          final completeSection = parts.last;
 
-        // Find the 'data: ' payload in this section
-        final dataIndex = completeSection.indexOf('data: ');
-        if (dataIndex != -1) {
-          // Extract the JSON array string
-          final jsonString = completeSection.substring(dataIndex + 6).trim();
-          final dataArray = jsonDecode(jsonString);
+          final dataIndex = completeSection.indexOf('data: ');
+          if (dataIndex != -1) {
+            final jsonString = completeSection.substring(dataIndex + 6).trim();
+            final dataArray = jsonDecode(jsonString);
 
-          // Our AI's raw text output is the first item
-          final String aiOutputString = dataArray[0];
+            final String aiOutputString = dataArray[0];
 
-          // --- THE BULLETPROOF JSON EXTRACTOR ---
-          // Find the exact start and end of the JSON object, ignoring chatty text
-          int startIndex = aiOutputString.indexOf('{');
-          int endIndex = aiOutputString.lastIndexOf('}');
+            // --- THE BULLETPROOF JSON EXTRACTOR ---
+            int startIndex = aiOutputString.indexOf('{');
+            int endIndex = aiOutputString.lastIndexOf('}');
 
-          if (startIndex != -1 && endIndex != -1 && endIndex >= startIndex) {
-            // Slice out only the JSON part
-            String cleanJson = aiOutputString.substring(
-              startIndex,
-              endIndex + 1,
-            );
-            return jsonDecode(cleanJson); // Parse the perfectly isolated JSON
-          } else {
-            throw Exception(
-              "The AI's response was cut off or did not contain JSON.",
-            );
+            if (startIndex != -1 && endIndex != -1 && endIndex >= startIndex) {
+              String cleanJson = aiOutputString.substring(startIndex, endIndex + 1);
+              return jsonDecode(cleanJson); 
+            } else {
+              throw Exception("The AI's response was cut off or did not contain JSON.");
+            }
           }
+        } 
+        // If the server explicitly throws an error during the stream
+        else if (accumulatedData.contains('event: error')) {
+          throw Exception("Hugging Face API returned an error during processing.");
         }
-      } else if (responseString.contains('event: error')) {
-        throw Exception(
-          "Hugging Face API returned an error during processing.",
-        );
       }
 
-      throw Exception("Failed to parse the final AI output.");
+      throw Exception("Connection closed before the AI finished thinking.");
+      
     } on FormatException catch (e) {
       throw Exception(
         "AI returned invalid JSON formatting. Please try scanning again.\nError: $e",
